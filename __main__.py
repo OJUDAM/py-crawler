@@ -35,6 +35,51 @@ def crawling_pelicana():
     table.to_csv('results/pelicana.csv', encoding='utf-8',mode="w", index=True)
 
 
+def crawling_wiki():
+    results = []
+    urldd = 'https://ko.wiktionary.org/wiki/%EB%B6%84%EB%A5%98:%ED%95%9C%EA%B5%AD%EC%96%B4_%EB%AA%85%EC%82%AC'
+
+    def crawling_data(url):
+
+        html = crawler.crawling(url)
+        bs = BeautifulSoup(html, 'html.parser')
+
+        #단어 parsing
+        tag_div_id = bs.find('div', attrs={'id': 'mw-pages'})
+        tag_div = tag_div_id.find('div', attrs={'class': 'mw-category-group'})
+        tag_ul = tag_div.find('ul')
+        tags_a = tag_ul.findAll('a')
+
+        for a in tags_a:
+            t = a.get('title')
+            if len(t) > 1:
+                results.append(t)
+            else:
+                continue
+
+            if a == "흰죽":
+                return "end"
+
+
+        # 다음 페이지 url 알아내기
+        tag_div_page = bs.find('div', attrs={'id': 'mw-pages'})
+        next_pages = tag_div_page.findAll('a', attrs={'title': '분류:한국어 명사'})
+        list_page = list(next_pages)
+        next_url = 'https://ko.wiktionary.org/'+list_page[-1].get('href')
+        return next_url
+
+    next = urldd
+    index = 0
+    while index < 131:
+        next = crawling_data(next)
+        index += 1
+
+    table = pd.DataFrame(results, columns=['word'])
+    table.to_csv('results/wiki.csv', encoding='utf-8', mode="w", index=True)
+
+
+
+
 def crawling_nene():
     results = []
     prev_name = ""
@@ -44,7 +89,6 @@ def crawling_nene():
 
         bs = BeautifulSoup(html, 'html.parser')
         tags_div = bs.findAll('div',attrs={'class':'shopInfo'})
-
         fin_flag = False
         print(prev_name)
         for index, tag_div in enumerate(tags_div):
@@ -102,16 +146,39 @@ def crawling_goobne():
     wd.get(url)
     time.sleep(3)
 
-    # 자바스크립트 실행
-    script = 'store.getList(2)'
-    wd.execute_script(script)
-    print(f'{datetime.now()} : success for request[{script}]')
-    time.sleep(2)
+    results = []
+    for page in count(1, 1):
+        # 자바스크립트 실행
+        script = 'store.getList(%d)' % page
+        wd.execute_script(script)
+        print(f'{datetime.now()} : success for request[{script}]')
+        time.sleep(2)
 
-    # 자바스크립트 실행결과(동적으로 렌더링된 HTML) 가져오기
-    html = wd.page_source
-    print(html)
+        # 자바스크립트 실행결과(동적으로 렌더링된 HTML) 가져오기
+        html = wd.page_source
+
+        # parsing with bs4
+        bs = BeautifulSoup(html, 'html.parser')
+        tag_tbody= bs.find('tbody', attrs={'id': 'store_list'})
+        tags_tr = tag_tbody.findAll('tr')
+
+        # 끝 검출
+        if tags_tr[0].get('class') is None:
+            break
+
+        for tag_tr in tags_tr:
+            strings = list(tag_tr.strings)
+            name = strings[1]
+            address = strings[6]
+            sidogu = address.split()[0:2]
+            t = (name, address) + tuple(sidogu)
+            results.append(t)
+
+    print(results)
     wd.quit()
+
+    table = pd.DataFrame(results, columns=['name', 'address', 'sido', 'gigun'])
+    table.to_csv('results/goobne.csv', encoding='utf-8', mode="w", index=True)
 
 
 if __name__ == '__main__':
@@ -125,4 +192,7 @@ if __name__ == '__main__':
     #crawling_kyochon()
 
     # goobne
-    crawling_goobne()
+    #crawling_goobne()
+
+    # wiki
+    crawling_wiki()
